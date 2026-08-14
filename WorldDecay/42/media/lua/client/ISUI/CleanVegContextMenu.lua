@@ -141,18 +141,27 @@ end
 -- true and its waitToStart() is the same faceLocation+shouldBeTurning
 -- pattern already proven reliable indoors, so it doesn't hit that gate.)
 local function onRemoveIndoorBush(worldobjects, square, player)
+    -- Client-side log - check your own client console/log for these, not
+    -- the dedicated server's, since everything up through queuing the
+    -- action happens locally before anything is ever sent.
     local tool = findCuttingTool(player)
 
     if not tool then
+        cleanLog("onRemoveIndoorBush: no cutting tool found in inventory, aborting")
+
         return
     end
 
     if player:getPrimaryHandItem() ~= tool then
+        cleanLog("onRemoveIndoorBush: equipping " .. tostring(tool:getName()))
         ISWorldObjectContextMenu.equip(player, player:getPrimaryHandItem(), tool, true)
     end
 
     if luautils.walkAdj(player, square, true) then
-        ISTimedActionQueue.add(CleanVegAction:new(player, square, CUT_BUSH_TIME, actionAnimFor(tool)))
+        cleanLog("onRemoveIndoorBush: queuing CleanVegAction at " .. square:getX() .. "," .. square:getY())
+        ISTimedActionQueue.add(CleanVegAction:new(player, square, CUT_BUSH_TIME, actionAnimFor(tool), false))
+    else
+        cleanLog("onRemoveIndoorBush: walkAdj failed, cannot reach " .. square:getX() .. "," .. square:getY())
     end
 end
 
