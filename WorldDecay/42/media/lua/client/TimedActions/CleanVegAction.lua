@@ -18,7 +18,7 @@ function CleanVegAction:update()
 end
 
 function CleanVegAction:start()
-    self:setActionAnim("RemoveGrass")
+    self:setActionAnim(self.actionAnim or "RemoveGrass")
     self:setOverrideHandModels(nil, nil)
     self.square:playSound("RemovePlant")
     self.character:reportEvent("EventCleanVeg")
@@ -48,7 +48,7 @@ function CleanVegAction:setOnComplete(func, arg1, arg2, arg3, arg4)
     self.onCompleteArgs = { arg1, arg2, arg3, arg4 }
 end
 
-function CleanVegAction:new(character, square, time)
+function CleanVegAction:new(character, square, time, actionAnim)
     local o = {}
 
     setmetatable(o, self)
@@ -60,6 +60,11 @@ function CleanVegAction:new(character, square, time)
     o.stopOnRun = true
     o.maxTime = time
     o.caloriesModifier = 10
+    -- Optional override for the play animation (e.g. "RemoveBushAxe"). Falls
+    -- back to the default "RemoveGrass" anim in start() when not given, so
+    -- every existing caller (Clean Vegetation tile/area cleanup) is
+    -- unaffected.
+    o.actionAnim = actionAnim
 
     if character:isTimedActionInstant() then
         o.maxTime = 1
