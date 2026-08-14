@@ -107,21 +107,27 @@ local function tryCleanObject(square, object)
     end
 
     local changed = removeCleanableDecorations(object)
-
-    if isSpecialObject(square, object) then
-        cleanLog("tryCleanObject: " .. tostring(spriteNameForLog) .. " is a special object, decorationsChanged=" .. tostring(changed))
-
-        return changed
-    end
-
     local modData = object:getModData()
     local cleanableType = modData and modData["WDecay_Cleanable"]
 
+    -- Check cleanable-main-object status BEFORE the special-object bail.
+    -- Bushes are apparently registered in square:getSpecialObjects() by the
+    -- engine (same list legitimately used to protect things like doors,
+    -- windows, and fences from being deleted outright) - so bailing out on
+    -- "is a special object" before this check meant bushes only ever got
+    -- their decorations stripped and were never actually removed, even
+    -- though the server received and processed the command correctly.
     if object ~= square:getFloor() and WDecay_CleanVegetation.isCleanableMainObject(object) then
         cleanLog("tryCleanObject: removing " .. tostring(spriteNameForLog) .. " (WDecay_Cleanable=" .. tostring(cleanableType) .. ")")
         square:transmitRemoveItemFromSquare(object)
 
         return true
+    end
+
+    if isSpecialObject(square, object) then
+        cleanLog("tryCleanObject: " .. tostring(spriteNameForLog) .. " is a special object, decorationsChanged=" .. tostring(changed))
+
+        return changed
     end
 
     if REMOVABLE_MARKER_TYPES[cleanableType] then
