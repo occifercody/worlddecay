@@ -98,13 +98,19 @@ local function tryCleanObject(square, object)
         return false
     end
 
+    local spriteNameForLog = isCleanDebug() and WDecay_CleanVegetation.getObjectSpriteName(object) or nil
+
     if hasContainer(object) then
+        cleanLog("tryCleanObject: skipped " .. tostring(spriteNameForLog) .. " - has a container")
+
         return false
     end
 
     local changed = removeCleanableDecorations(object)
 
     if isSpecialObject(square, object) then
+        cleanLog("tryCleanObject: " .. tostring(spriteNameForLog) .. " is a special object, decorationsChanged=" .. tostring(changed))
+
         return changed
     end
 
@@ -112,6 +118,7 @@ local function tryCleanObject(square, object)
     local cleanableType = modData and modData["WDecay_Cleanable"]
 
     if object ~= square:getFloor() and WDecay_CleanVegetation.isCleanableMainObject(object) then
+        cleanLog("tryCleanObject: removing " .. tostring(spriteNameForLog) .. " (WDecay_Cleanable=" .. tostring(cleanableType) .. ")")
         square:transmitRemoveItemFromSquare(object)
 
         return true
@@ -238,7 +245,14 @@ local function onCleanVegCommand(module, command, player, args)
         return
     end
 
-    WDecay_CleanSquare(square)
+    local objectsBefore = square:getObjects()
+    local objectCountBefore = objectsBefore and objectsBefore:size() or 0
+
+    local changed = WDecay_CleanSquare(square)
+
+    cleanLog(string.format(
+        "onCleanVegCommand: cleaned square (%d,%d,%d) objectsBefore=%d changed=%s",
+        x, y, z, objectCountBefore, tostring(changed)))
 end
 
 Events.OnClientCommand.Add(onCleanVegCommand)
