@@ -24,12 +24,6 @@ end
 local ISRemovePlantCursor_getRemovableObject = ISRemovePlantCursor.getRemovableObject
 
 function ISRemovePlantCursor:getRemovableObject(square)
-    local vanillaPass = ISRemovePlantCursor_getRemovableObject(self, square)
-
-    if vanillaPass then
-        return vanillaPass
-    end
-
     local function findTagged(objects)
         if not objects then
             return nil
@@ -58,7 +52,16 @@ function ISRemovePlantCursor:getRemovableObject(square)
         return nil
     end
 
-    return findTagged(square:getObjects()) or findTagged(square:getSpecialObjects())
+    local tagged = findTagged(square:getObjects()) or findTagged(square:getSpecialObjects())
+
+    if tagged then
+        return tagged
+    end
+
+    -- No mod-tracked object here (e.g. a bush that was never touched by
+    -- WorldDecay). Fall back to vanilla so untouched vegetation still
+    -- behaves exactly like base game.
+    return ISRemovePlantCursor_getRemovableObject(self, square)
 end
 
 local function validCoordinate(value)
@@ -182,12 +185,18 @@ local function inspectList(objects, command, result)
 
     for i = 0, objects:size() - 1 do
         local object = objects:get(i)
+        local tagged = matchesTagged(object, command)
 
-        if hasFlag(object, flag) then
+        -- A vanilla-flagged object only blocks tracked removal when it's some
+        -- OTHER object we don't manage. If the vanilla flag belongs to our own
+        -- tagged object (e.g. a mod-spawned bush, which is a real vanilla bush
+        -- sprite and so already carries canBeCut), that must not stop us from
+        -- marking the square cleaned - otherwise it just regrows later.
+        if hasFlag(object, flag) and not tagged then
             result.vanilla = true
         end
 
-        if matchesTagged(object, command) then
+        if tagged then
             result.count = result.count + 1
             result.object = object
         end

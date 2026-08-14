@@ -119,8 +119,15 @@ local function fastCheckPlacement(square, level)
         end
 
         if r.room then
-            r.isIndoor = true
-            r.isUrban = true
+            -- A real constructed floor (wood, tile, garage/concrete, etc.) should
+            -- block indoor vegetation the same way it already blocks it outdoors -
+            -- only bare ground / exposed subfloor under a roof stays eligible.
+            local hasConstructedFloor = floor ~= nil and not square:hasNaturalFloor()
+
+            if not hasConstructedFloor then
+                r.isIndoor = true
+                r.isUrban = true
+            end
         end
 
         if level == 0 and floorName then
