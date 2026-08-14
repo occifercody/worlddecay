@@ -19,6 +19,50 @@ local function cleanLog(msg)
     end
 end
 
+local CUT_BUSH_TIME = 75
+
+-- Same tag vanilla requires to remove a wall vine or an outdoor bush -
+-- machete, axe, knife, etc - and the same "not broken" check.
+local function predicateCutPlant(item)
+    return item ~= nil and not item:isBroken() and item:hasTag(ItemTag.CUT_PLANT)
+end
+
+local function findCuttingTool(player)
+    local handItem = player:getPrimaryHandItem()
+
+    if predicateCutPlant(handItem) then
+        return handItem
+    end
+
+    local inv = player:getInventory()
+
+    return inv and inv:getFirstEvalRecurse(predicateCutPlant) or nil
+end
+
+-- Mirrors vanilla's ISRemoveBush:start() animation choice so cutting an
+-- indoor bush looks the same as cutting one outdoors.
+local function actionAnimFor(weapon)
+    if not weapon then
+        return "RemoveBush"
+    end
+
+    local scriptItem = weapon:getScriptItem()
+
+    if not scriptItem then
+        return "RemoveBush"
+    end
+
+    if scriptItem:containsWeaponCategory(WeaponCategory.AXE) then
+        return "RemoveBushAxe"
+    elseif scriptItem:containsWeaponCategory(WeaponCategory.LONG_BLADE) then
+        return "RemoveBushLongBlade"
+    elseif scriptItem:containsWeaponCategory(WeaponCategory.SMALL_BLADE) then
+        return "RemoveBushKnife"
+    end
+
+    return "RemoveBush"
+end
+
 local function onCleanVegMenu(worldobjects, square, player, areaSize)
     local bo = CleanVegCursor:new("", "", player, areaSize)
 
@@ -83,21 +127,33 @@ local function findIndoorBushSquare(worldobjects)
     return nil
 end
 
--- Route through vanilla's own bush-removal flow - the exact same one the
--- outdoor "Remove Bush" option (under Gardening) and "Remove Wall Vine" use
--- (ISWorldObjectContextMenu.doRemovePlant -> ISRemoveBush timed action).
--- That means: requires a tool tagged CUT_PLANT (machete, axe, knife, etc -
--- whatever vanilla accepts for wall vines), auto-equips one from inventory
--- if the player isn't already holding one, and plays the correct
--- weapon-specific swing animation instead of a generic toolless action.
--- It also fires vanilla's own removal networking, which
--- removePlantServer.lua already listens for to mark the square cleaned so
--- the bush won't grow back.
+-- Requires the same CUT_PLANT-tagged tool vanilla requires for Remove Wall
+-- Vine/outdoor Remove Bush (auto-equipping one from inventory if needed),
+-- and plays the matching weapon-specific swing animation - but queues our
+-- own CleanVegAction rather than vanilla's ISRemoveBush timed action.
+--
+-- (A previous version of this routed straight through vanilla's
+-- ISWorldObjectContextMenu.doRemovePlant/ISRemoveBush, which gets the tool
+-- and animation "for free" - but that action's own isValid()/waitToStart()
+-- gate got the character stuck standing there indoors with the weapon drawn
+-- and no swing, likely a vanilla edge case with indoor facing/validity we
+-- can't safely patch around. CleanVegAction's isValid() is unconditionally
+-- true and its waitToStart() is the same faceLocation+shouldBeTurning
+-- pattern already proven reliable indoors, so it doesn't hit that gate.)
 local function onRemoveIndoorBush(worldobjects, square, player)
-    -- `player` here is already the resolved IsoPlayer object (addCleanVegMenu
-    -- shadows the raw playerNum with getSpecificPlayer before wiring up any
-    -- menu option), so it's passed straight through.
-    ISWorldObjectContextMenu.doRemovePlant(player, square, false)
+    local tool = findCuttingTool(player)
+
+    if not tool then
+        return
+    end
+
+    if player:getPrimaryHandItem() ~= tool then
+        ISWorldObjectContextMenu.equip(player, player:getPrimaryHandItem(), tool, true)
+    end
+
+    if luautils.walkAdj(player, square, true) then
+        ISTimedActionQueue.add(CleanVegAction:new(player, square, CUT_BUSH_TIME, actionAnimFor(tool)))
+    end
 end
 
 local function addCleanVegMenu(player, context, worldobjects)
