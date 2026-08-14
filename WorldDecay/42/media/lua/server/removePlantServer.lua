@@ -76,21 +76,35 @@ local function isReachable(player, square)
     local playerSquare = player:getSquare()
 
     if not playerSquare then
+        cleanLog("isReachable: player has no square")
         return false
     end
 
     local dx = math.abs(playerSquare:getX() - square:getX())
     local dy = math.abs(playerSquare:getY() - square:getY())
 
-    if dx > 1 or dy > 1 then
+    -- Same latency issue as CleanVegClientCommands.lua's isReachable: on a
+    -- dedicated server the command can land after the client has taken
+    -- another step. Allow up to 2 tiles instead of a strict 1-tile radius,
+    -- keeping the line-of-sight check only for the adjacent case.
+    if dx > 2 or dy > 2 then
+        cleanLog(string.format(
+            "isReachable: rejected dx=%d dy=%d square=(%d,%d,%d) player=(%d,%d,%d)",
+            dx, dy, square:getX(), square:getY(), square:getZ(),
+            playerSquare:getX(), playerSquare:getY(), playerSquare:getZ()))
+
         return false
     end
 
-    if dx == 0 and dy == 0 then
-        return true
+    if dx <= 1 and dy <= 1 then
+        if dx == 0 and dy == 0 then
+            return true
+        end
+
+        return not playerSquare:isBlockedTo(square)
     end
 
-    return not playerSquare:isBlockedTo(square)
+    return true
 end
 
 local function hasContainer(object)
@@ -240,12 +254,20 @@ local function onRemovePlantCommand(module, command, player, args)
 
     local square = getCell():getGridSquare(x, y, z)
 
-    if not square or not isReachable(player, square) then
+    if not square then
+        cleanLog(string.format("onRemovePlantCommand: no square at (%d,%d,%d)", x, y, z))
+        return
+    end
+
+    if not isReachable(player, square) then
+        cleanLog(string.format("onRemovePlantCommand: square (%d,%d,%d) rejected as unreachable, removal aborted", x, y, z))
         return
     end
 
     if removeUniqueTagged(square, command) then
         square:getModData()["WDecay_cleaned"] = true
+    else
+        cleanLog(string.format("onRemovePlantCommand: removeUniqueTagged failed for (%d,%d,%d) command=%s", x, y, z, tostring(command)))
     end
 end
 
