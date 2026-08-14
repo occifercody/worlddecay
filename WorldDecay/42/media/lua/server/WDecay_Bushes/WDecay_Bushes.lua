@@ -40,18 +40,19 @@ WDecay_Bushes.bushes = {
 }
 
 function WDecay_Bushes.getRandomBush()
-    function WDecay_Bushes.resetCaches()
-    cachedBase = nil
-    cachedBaseRoad = nil
-    cachedBaseIndoor = nil
-end
-
-return WDecay_Bushes.bushes[randomizer:random(1, #WDecay_Bushes.bushes)]
+    return WDecay_Bushes.bushes[randomizer:random(1, #WDecay_Bushes.bushes)]
 end
 
 local cachedBase = nil
 local cachedBaseRoad = nil
 local cachedBaseIndoor = nil
+
+function WDecay_Bushes.resetCaches()
+    cachedBase = nil
+    cachedBaseRoad = nil
+    cachedBaseIndoor = nil
+end
+
 function WDecay_Bushes.getBasePercentage()
     if cachedBase == nil then
         local opt = getSandboxOptions():getOptionByName('WDecay.bushesPercentage')
