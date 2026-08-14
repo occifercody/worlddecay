@@ -1,6 +1,23 @@
 require('luautils')
 local WDecay_CleanVegetation = require('wdecay_cleanvegetation/wdecay_cleanvegetation')
 
+local cachedDebugMode = nil
+
+local function isCleanDebug()
+    if cachedDebugMode == nil then
+        local opt = getSandboxOptions():getOptionByName('WDecay.debugMode')
+        cachedDebugMode = opt and opt:getValue() or false
+    end
+
+    return cachedDebugMode
+end
+
+local function cleanLog(msg)
+    if isCleanDebug() then
+        print("[WDecay-Clean] " .. msg)
+    end
+end
+
 local REMOVABLE_MARKER_TYPES = {
     grass = true,
     bush = true,
@@ -161,21 +178,38 @@ local function isReachable(player, square)
     local playerSquare = player:getSquare()
 
     if not playerSquare then
+        cleanLog("isReachable: player has no square")
         return false
     end
 
     local dx = math.abs(playerSquare:getX() - square:getX())
     local dy = math.abs(playerSquare:getY() - square:getY())
 
-    if dx > 1 or dy > 1 then
+    -- On a dedicated server this command can arrive slightly after the
+    -- client's local timed action already finished (network latency,
+    -- position resync), by which point the player may have taken another
+    -- step. A strict 1-tile radius rejected legitimate removals outright
+    -- with zero feedback. Allow up to 2 tiles, keeping the precise
+    -- line-of-sight check only for the immediately-adjacent case it was
+    -- meant for.
+    if dx > 2 or dy > 2 then
+        cleanLog(string.format(
+            "isReachable: rejected dx=%d dy=%d square=(%d,%d,%d) player=(%d,%d,%d)",
+            dx, dy, square:getX(), square:getY(), square:getZ(),
+            playerSquare:getX(), playerSquare:getY(), playerSquare:getZ()))
+
         return false
     end
 
-    if dx == 0 and dy == 0 then
-        return true
+    if dx <= 1 and dy <= 1 then
+        if dx == 0 and dy == 0 then
+            return true
+        end
+
+        return not playerSquare:isBlockedTo(square)
     end
 
-    return not playerSquare:isBlockedTo(square)
+    return true
 end
 
 local function onCleanVegCommand(module, command, player, args)
@@ -188,14 +222,23 @@ local function onCleanVegCommand(module, command, player, args)
     local z = args.z
 
     if not validCoordinate(x) or not validCoordinate(y) or not validCoordinate(z) then
+        cleanLog("onCleanVegCommand: invalid coordinates in command")
         return
     end
 
     local square = getCell():getGridSquare(x, y, z)
 
-    if square and isReachable(player, square) then
-        WDecay_CleanSquare(square)
+    if not square then
+        cleanLog(string.format("onCleanVegCommand: no square at (%d,%d,%d)", x, y, z))
+        return
     end
+
+    if not isReachable(player, square) then
+        cleanLog(string.format("onCleanVegCommand: square (%d,%d,%d) rejected as unreachable, clean aborted", x, y, z))
+        return
+    end
+
+    WDecay_CleanSquare(square)
 end
 
 Events.OnClientCommand.Add(onCleanVegCommand)
